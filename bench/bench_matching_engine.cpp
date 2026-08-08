@@ -31,7 +31,7 @@ static void BM_MatchingEngineOrderFlow(benchmark::State& state){
     lob::TradingBot bot(1, kMeanPrice, kMaxPrice);
     std::array<lob::Trade, 64> trades;
 
-    for(auto _ : state)//runs until the value becomes statistically stable
+    for(auto _ : state)//runs until the value becomes statistically stable, but we later fix the iterations to remain within the bounds of the orderbooks capacity
     {
         lob::BotOrder order = bot.next();
         switch(order.action){
@@ -59,8 +59,6 @@ BENCHMARK(BM_MatchingEngineOrderFlow)->Iterations(kStreamLength)->Unit(benchmark
 static void BM_MatchingEngineOrderFlow_no_bot(benchmark::State& state){
     const std::vector<lob::BotOrder>& stream = orderStream();
 
-    // Fresh engine per repetition: a carried-over book would drift pool
-    // occupancy and bias later repetitions.
     lob::MatchingEngine engine("BENCH", kMaxPrice);
     std::array<lob::Trade, 64> trades;
     std::size_t cursor = 0;
