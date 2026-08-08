@@ -8,6 +8,22 @@
 namespace{
     constexpr lob::Price kMaxPrice =100'000;
     constexpr lob::Price kMeanPrice = 50'000;
+    // Pool is kOrderCapacity == 1<<20. At ~75% limits / ~15% cancels this
+    // stream rests at most ~393k orders, so the pool cannot exhaust mid-run.
+    constexpr std::size_t kStreamLength = 1u << 20;
+
+    // Generated once for the whole process: every repetition replays the same
+    // sequence, so run-to-run spread reflects the machine, not the RNG.
+    const std::vector<lob::BotOrder>& orderStream(){
+        static const std::vector<lob::BotOrder> stream = []{
+            lob::TradingBot bot(1, kMeanPrice, kMaxPrice);
+            std::vector<lob::BotOrder> v;
+            v.reserve(kStreamLength);
+            for(std::size_t i = 0; i < kStreamLength; i++) v.push_back(bot.next());
+            return v;
+        }();
+        return stream;
+    }
 }
 static void BM_MatchingEngineOrderFlow(benchmark::State& state){
     //setup
@@ -38,10 +54,51 @@ static void BM_MatchingEngineOrderFlow(benchmark::State& state){
     }
     state.SetItemsProcessed(state.iterations()); 
 }
-BENCHMARK(BM_MatchingEngineOrderFlow)->Unit(benchmark::kNanosecond);
+BENCHMARK(BM_MatchingEngineOrderFlow)->Iterations(kStreamLength)->Unit(benchmark::kNanosecond);
 
+static void BM_MatchingEngineOrderFlow_no_bot(benchmark::State& state){
+    const std::vector<lob::BotOrder>& stream = orderStream();
+
+    // Fresh engine per repetition: a carried-over book would drift pool
+    // occupancy and bias later repetitions.
+    lob::MatchingEngine engine("BENCH", kMaxPrice);
+    std::array<lob::Trade, 64> trades;
+    std::size_t cursor = 0;
+
+    if(static_cast<std::size_t>(state.max_iterations) > stream.size()){
+        state.SkipWithError("order stream shorter than iteration count");
+        return;
+    }
+
+    for(auto _ : state)
+    {
+        const lob::BotOrder& order = stream[cursor++];
+        switch(order.action){
+            case lob::BotAction::MARKET :
+            {
+                benchmark::DoNotOptimize(
+                    engine.addMarketOrder(order.id, order.side, order.quantity, trades));
+                break;
+            }
+            case lob::BotAction::LIMIT:
+            {
+                benchmark::DoNotOptimize(
+                    engine.addLimitOrder(order.id, order.side, order.price, order.quantity, trades));
+                break;
+            }
+            case lob::BotAction::CANCEL:
+            {
+                benchmark::DoNotOptimize(engine.cancelOrder(order.id));
+                break;
+            }
+        }
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_MatchingEngineOrderFlow_no_bot)->Iterations(kStreamLength)->Unit(benchmark::kNanosecond);
 
 //future scope -- use historical orderbook data so that latency of bot is not included
+
 static void BM_InsertCancelRoundTrip(benchmark::State& state)
 {
     //set-up
@@ -49,7 +106,9 @@ static void BM_InsertCancelRoundTrip(benchmark::State& state)
     ///no-bot here(involves the rng and distributions delays), no matching
     //just measure the bookkeeping
     std::array<lob::Trade, 4> trades;
-    lob::OrderId id = 1;
+    lob::OrderId id = 2;
+    engine.addLimitOrder(1, lob::Side::BUY, 100, 10, trades); //keeps the level non-empty
+
 
     for(auto _ : state){
         //add a BUY LIMIT order
