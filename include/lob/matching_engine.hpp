@@ -47,6 +47,17 @@ namespace lob{
         Price bestBid() const noexcept{return best_bid_;}
         Price bestAsk() const noexcept{return best_ask_;}
 
+        //non-allocating single level read,
+        //topBidLevels/topAskLevels return vectors
+        //which the MD path cannot afford per message
+        //caller must ensure 0<= oprice < max_price
+        [[nodiscard]] LevelView levelAt(Side side, Price price) const noexcept{
+            const PriceLevel& level =
+                (side == Side::BUY ? *bid_levels_ : *ask_levels_)
+                    [static_cast<std::size_t>(price)];
+            return LevelView{price, level.total_quantity, level.order_count};
+        }
+
         std::string_view symbol()const noexcept{return symbol_;}
         std::size_t restingOrderCount() const noexcept{return id_to_index_.size();}
 

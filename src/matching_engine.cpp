@@ -144,7 +144,7 @@ namespace lob{
     void MatchingEngine::advanceBestAsk()
     {
         //this order was matched, next best_ask_ can be higher
-        for(Price p = best_ask_+1; p <= max_price_; p++){
+        for(Price p = best_ask_+1; p < max_price_; p++){
             if(!(*ask_levels_)[static_cast<std::size_t>(p)].empty()){
                 best_ask_ = p;
                 return ;
