@@ -149,8 +149,9 @@ namespace lob{
                 best_ask_ = p;
                 return ;
             }
-            best_ask_ = kInvalidPrice;
+            
         }
+        best_ask_ = kInvalidPrice;
     }
     void MatchingEngine::advanceBestBid()
     {
