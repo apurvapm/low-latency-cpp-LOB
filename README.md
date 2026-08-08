@@ -31,6 +31,23 @@ in C++20, built for low and predictable latency.
   rescans neighboring ticks when the current best level empties out, which
   is amortized O(1) for realistic order flow.
 
+## Benchmarks
+
+Machine (15 cores, 64 KiB L1d, 8 MiB L2), `-O3 -march=native`. Google Benchmark, single run per configuration,
+
+### Results
+
+| benchmark | orders | ns/order | orders/sec |
+|---|---:|---:|---:|
+| Mixed limit/market/cancel flow | 1,048,576 | **26.8** | **37.4M** |
+| Insert + cancel round trip | 31,657,448 | **22.9** | **43.6M** |
+
+The mixed flow replays a pre-generated stream from `TradingBot` (~75% limit,
+~15% cancel, ~10% market) with the iteration count pinned below the order
+pool's 2²⁰ capacity. The round trip measures pure bookkeeping — pool
+acquire/release, intrusive list splice/unlink, and two `id_to_index_`
+operations — with no matching.
+
 <!-- The one simplicity trade-off: `id_to_index_` is a
 `std::unordered_map` rather than a hand-rolled open-addressing table, so
 cancellation can allocate internally under sustained load even though it's
@@ -119,27 +136,8 @@ cmake -S . -B build-tsan -DCMAKE_BUILD_TYPE=Debug -DENABLE_TSAN=ON -DBUILD_BENCH
 cmake --build build-tsan -j && ctest --test-dir build-tsan --output-on-failure
 ```
 
-## Benchmarks
 
-Single core, Apple M5 Pro (15 cores, 64 KiB L1d, 8 MiB L2), macOS <VERSION>,
-<COMPILER>, `-O3 -march=native`. Google Benchmark, single run per configuration,
-no repetitions — the machine carried a load average of 1.4–2.8, and repeated
-runs of an unchanged configuration vary by ~3%, so **treat every figure as ±5%**.
-
-### Results
-
-| benchmark | orders | ns/order | orders/sec |
-|---|---:|---:|---:|
-| Mixed limit/market/cancel flow | 1,048,576 | **26.8** | **37.4M** |
-| Insert + cancel round trip | 31,657,448 | **22.9** | **43.6M** |
-
-The mixed flow replays a pre-generated stream from `TradingBot` (~75% limit,
-~15% cancel, ~10% market) with the iteration count pinned below the order
-pool's 2²⁰ capacity. The round trip measures pure bookkeeping — pool
-acquire/release, intrusive list splice/unlink, and two `id_to_index_`
-operations — with no matching.
-
-### How the harness got to those numbers
+### Benchmark details
 
 The first version of the mixed-flow benchmark reported 95.9 ns/order. Two
 separate measurement faults accounted for most of that:
