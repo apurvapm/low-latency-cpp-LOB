@@ -58,11 +58,11 @@ if(NOT ENABLE_ASAN AND NOT ENABLE_UBSAN AND NOT ENABLE_TSAN)
   add_executable(lob_test_no_alloc tests/test_no_alloc.cpp)
   target_link_libraries(lob_test_no_alloc PRIVATE lob_core)
   add_test(NAME lob_test_no_alloc COMMAND lob_test_no_alloc)
-  # Expected to fail until A3 replaces id_to_index_ (std::unordered_map) with
-  # a preallocated flat map (P1): the current map allocates a node per
-  # resting insert despite reserve(), ~549,602 times over this stream.
-  set_tests_properties(lob_test_no_alloc PROPERTIES WILL_FAIL TRUE)
 endif()
+
+add_executable(lob_test_flat_id_map tests/test_flat_id_map.cpp)
+target_link_libraries(lob_test_flat_id_map PRIVATE lob_core)
+add_test(NAME lob_test_flat_id_map COMMAND lob_test_flat_id_map)
 
 if(BUILD_BENCHMARKS)
   include(FetchContent)
