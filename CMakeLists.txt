@@ -52,6 +52,9 @@ target_link_libraries(lob_demo PRIVATE lob_core)
 add_executable(lob_cli cli/lob_cli.cpp)
 target_link_libraries(lob_cli PRIVATE lob_core)
 
+add_executable(lob_latency bench/latency_mixed.cpp)
+target_link_libraries(lob_latency PRIVATE lob_core)
+
 enable_testing()
 add_executable(lob_tests tests/test_order_book.cpp)
 target_link_libraries(lob_tests PRIVATE lob_core)
