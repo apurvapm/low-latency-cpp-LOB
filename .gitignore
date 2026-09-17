@@ -1,5 +1,8 @@
 build/
+build-*/
 compile_commands.json
 .cache/
 .vscode
 .DS_Store
+bench_results.json
+TASK_TODAY.md
