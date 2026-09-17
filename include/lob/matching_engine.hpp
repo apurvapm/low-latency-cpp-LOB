@@ -14,10 +14,10 @@
 #include "lob/price_level.hpp"
 #include "lob/object_pool.hpp"
 #include "lob/flat_id_map.hpp"
+#include "lob/level_bitmap.hpp"
 
 namespace lob{
     inline constexpr std::size_t kOrderCapacity = 1u<<20; // ~1M orders
-    inline constexpr std::size_t kMaxPriceTicks = 100'000; // upto $999.99 at a $0.01 per tick 
 
 //these two needed for the cli 
     struct LevelView{
@@ -86,6 +86,8 @@ namespace lob{
 
         std::unique_ptr<std::array<PriceLevel, kMaxPriceTicks>> bid_levels_; //dont want the matching engine to own the enormous array directly, also might get stack overflow
         std::unique_ptr<std::array<PriceLevel, kMaxPriceTicks>> ask_levels_;
+        std::unique_ptr<LevelBitmap> bid_bitmap_; //bit set <=> the level at that tick is non-empty
+        std::unique_ptr<LevelBitmap> ask_bitmap_;
         FlatIdMap id_to_index_; //preallocated open-addressing map, allocates once at construction, never on the hot path
         std::unique_ptr<ObjectPool<Order, kOrderCapacity>> pool_;
         std::uint64_t duplicate_id_count_ = 0;

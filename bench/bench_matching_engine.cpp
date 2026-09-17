@@ -119,4 +119,24 @@ static void BM_InsertCancelRoundTrip(benchmark::State& state)
 
 BENCHMARK(BM_InsertCancelRoundTrip)->Unit(benchmark::kNanosecond);
 
+static void BM_InsertCancelEmptyLevel(benchmark::State& state)
+{
+    // Same as BM_InsertCancelRoundTrip but with no second resting order at
+    // the price, so every cancel empties the level and calls
+    // advanceBestBid/Ask (P2: pre-bitmap this was an O(gap) tick-by-tick
+    // scan; with the bitmap it should cost about the same as the variant
+    // that never empties the level).
+    lob::MatchingEngine engine("BENCH", kMaxPrice);
+    std::array<lob::Trade, 4> trades;
+    lob::OrderId id = 1;
+
+    for(auto _ : state){
+        lob::OrderId cur_id = id++;
+        engine.addLimitOrder(cur_id, lob::Side::BUY, 100, 10, trades);
+        benchmark::DoNotOptimize(engine.cancelOrder(cur_id));
+    }
+    state.SetItemsProcessed(state.iterations());
+}
+BENCHMARK(BM_InsertCancelEmptyLevel)->Unit(benchmark::kNanosecond);
+
 BENCHMARK_MAIN();

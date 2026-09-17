@@ -10,6 +10,8 @@ namespace lob{
     max_price_(max_price), //
     bid_levels_(std::make_unique<std::array<PriceLevel, kMaxPriceTicks>>()), //this will be allocated once
     ask_levels_(std::make_unique<std::array<PriceLevel, kMaxPriceTicks>>()), //can go further and touch all allocated pages, so that there are no page faults later
+    bid_bitmap_(std::make_unique<LevelBitmap>()),
+    ask_bitmap_(std::make_unique<LevelBitmap>()),
     id_to_index_(kOrderCapacity),
     pool_(std::make_unique<ObjectPool<Order, kOrderCapacity>>())
     {
@@ -55,7 +57,10 @@ namespace lob{
                         pool_->release(filledOrderIdx);
                     }
                 }
-                if(level.empty())advanceBestAsk();   
+                if(level.empty()){
+                    ask_bitmap_->clear(best_ask_);
+                    advanceBestAsk();
+                }
             }
         }
         else {
@@ -80,7 +85,10 @@ namespace lob{
                         id_to_index_.erase(maker_id);
                     }
                 }
-                if(level.empty())advanceBestBid();
+                if(level.empty()){
+                    bid_bitmap_->clear(best_bid_);
+                    advanceBestBid();
+                }
             }
         }
         return n_ordersFilled;
@@ -126,6 +134,7 @@ namespace lob{
 
         std::array<PriceLevel, kMaxPriceTicks>& levels = (side==Side::BUY)? *bid_levels_ : *ask_levels_;
         PriceLevel& level = levels[static_cast<std::size_t>(price)];
+        bool wasEmpty = level.empty();
         if(level.tail == kInvalidIndex){
             level.head = idx;
             level.tail = idx;
@@ -138,6 +147,10 @@ namespace lob{
         level.total_quantity += qty;
         level.order_count += 1;
 
+        if(wasEmpty){
+            (side==Side::BUY ? *bid_bitmap_ : *ask_bitmap_).set(price);
+        }
+
         if(side== Side::BUY){
             //check if best_bid_ can be increased
             if(best_bid_==kInvalidPrice || price > best_bid_) best_bid_ = price;
@@ -147,28 +160,15 @@ namespace lob{
     }
     void MatchingEngine::advanceBestAsk()
     {
-        //this order was matched, next best_ask_ can be higher
-        for(Price p = best_ask_+1; p < max_price_; p++){
-            if(!(*ask_levels_)[static_cast<std::size_t>(p)].empty()){
-                best_ask_ = p;
-                return ;
-            }
-            
-        }
-        best_ask_ = kInvalidPrice;
+        //this level was emptied; the next best ask is the next set bit above it,
+        //found in O(1) via the bitmap instead of an O(gap) tick-by-tick scan (P2)
+        Price next = ask_bitmap_->nextSetAtOrAbove(best_ask_ + 1);
+        best_ask_ = (next != kInvalidPrice && next < max_price_) ? next : kInvalidPrice;
     }
     void MatchingEngine::advanceBestBid()
     {
-        //this(best_bid_) entire level was matched, next best bid can be lower 
-        for(Price p = best_bid_-1; p>=0; --p){
-            //if that level is not empty
-            if(!(*bid_levels_)[static_cast<std::size_t>(p)].empty()){
-                best_bid_ = p;
-                return;
-            }
-        }
-        best_bid_ = kInvalidPrice;
-
+        //this level was emptied; the next best bid is the next set bit below it
+        best_bid_ = bid_bitmap_->prevSetAtOrBelow(best_bid_ - 1);
     }
 
     bool MatchingEngine::cancelOrder(OrderId id)
@@ -191,6 +191,7 @@ namespace lob{
         pool_->release(idx);
 
         if(level.empty()){
+            (side==Side::BUY ? *bid_bitmap_ : *ask_bitmap_).clear(price);
             if(side==Side::BUY && best_bid_ == price)advanceBestBid();
             else if(side == Side::SELL && best_ask_==price)advanceBestAsk();
         }

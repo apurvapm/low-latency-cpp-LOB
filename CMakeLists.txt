@@ -21,6 +21,11 @@ add_library(lob_core STATIC
 target_include_directories(lob_core PUBLIC include)
 target_compile_features(lob_core PUBLIC cxx_std_20)
 target_compile_options(lob_core PUBLIC -Wall -Wextra -Wpedantic)
+# Statically link the runtime so binaries don't depend on whichever
+# libstdc++-6.dll happens to be first on PATH (on this MinGW/MSYS2 setup,
+# Git's bundled mingw64 copy shadows the toolchain's own and is ABI-
+# incompatible, causing runtime crashes). Harmless on Linux too.
+target_link_options(lob_core PUBLIC -static-libgcc -static-libstdc++)
 
 if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT (ENABLE_ASAN OR ENABLE_TSAN))
   target_compile_options(lob_core PUBLIC -O3 -march=native)
@@ -64,10 +69,17 @@ add_executable(lob_test_flat_id_map tests/test_flat_id_map.cpp)
 target_link_libraries(lob_test_flat_id_map PRIVATE lob_core)
 add_test(NAME lob_test_flat_id_map COMMAND lob_test_flat_id_map)
 
+add_executable(lob_test_level_bitmap tests/test_level_bitmap.cpp)
+target_link_libraries(lob_test_level_bitmap PRIVATE lob_core)
+add_test(NAME lob_test_level_bitmap COMMAND lob_test_level_bitmap)
+
 if(BUILD_BENCHMARKS)
   include(FetchContent)
   set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
   set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
+  # Upstream sysinfo.cc has a non-exhaustive switch on newer GCC targeting
+  # Windows; not our code to fix.
+  set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
   FetchContent_Declare(
     googlebenchmark
     GIT_REPOSITORY https://github.com/google/benchmark.git
