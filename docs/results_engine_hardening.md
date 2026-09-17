@@ -1,4 +1,4 @@
-# B0: synthetic mixed-flow latency, before vs after Day 0
+# B0: synthetic mixed-flow latency, before vs after engine hardening
 
 Before = `v1.0-synthetic` (commit `44ece64`, built in a separate `git worktree`).
 After = current `main` after A1-A5 (flat id map, hierarchical bitmap, input
@@ -80,9 +80,9 @@ up in a mean.
 individual runs saw single spikes over 5-7 ms in *both* builds). These
 spikes are 3-4 orders of magnitude above the p99.99 and are consistent with
 OS-level preemption (thread quantum expiry, an E-core migration, a page
-fault) on a shared laptop, not the matching engine — the algorithmic fixes
-in A1-A4 don't touch anything that could cost milliseconds. Per the working
-rules, this "unexpected direction" was investigated (see A4's commit
+fault) on a shared laptop, not the matching engine — the hardening changes
+don't touch anything that could cost milliseconds. Per the working rules,
+this "unexpected direction" was investigated (see the bitmap commit's
 message for the `BM_InsertCancelEmptyLevel` investigation, where the same
 kind of noise was reproduced and ruled out as a real regression by rerunning
 several times) rather than papered over.
@@ -137,7 +137,7 @@ from the medians reported above and in the README.
 
 `BM_InsertCancelEmptyLevel` (85.3 ns median) is now within ~3% of
 `BM_InsertCancelRoundTrip` (82.9 ns median) — down from the historical 45.2 ns
-vs 22.9 ns (~2x) gap recorded before the bitmap (A4), confirming the O(gap)
+vs 22.9 ns (~2x) gap recorded before the bitmap, confirming the O(gap)
 `advanceBestBid`/`advanceBestAsk` scan is gone.
 
 ## Reproduce

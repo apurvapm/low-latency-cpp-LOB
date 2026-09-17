@@ -1,5 +1,5 @@
 // B0: per-order latency distribution for the synthetic mixed stream, before
-// vs after the Day 0 fixes. Not Google Benchmark -- this times each op with
+// vs after the engine hardening changes. Not Google Benchmark -- this times each op with
 // rdtsc into a preallocated vector and reports percentiles, since an average
 // hides exactly the tail the flat map and bitmap were meant to fix.
 //
