@@ -10,10 +10,10 @@ namespace lob{
     max_price_(max_price), //
     bid_levels_(std::make_unique<std::array<PriceLevel, kMaxPriceTicks>>()), //this will be allocated once
     ask_levels_(std::make_unique<std::array<PriceLevel, kMaxPriceTicks>>()), //can go further and touch all allocated pages, so that there are no page faults later
+    id_to_index_(kOrderCapacity),
     pool_(std::make_unique<ObjectPool<Order, kOrderCapacity>>())
     {
         assert(max_price > 0 && static_cast<std::size_t>(max_price_) <= kMaxPriceTicks);
-        id_to_index_.reserve(kOrderCapacity); 
     }
 
     std::size_t MatchingEngine::addLimitOrder(OrderId id, Side side, Price price, Quantity qty, std::span<Trade> trades)
@@ -107,6 +107,10 @@ namespace lob{
         level.order_count-=1;
     }
     void MatchingEngine::insertResting(OrderId id, Side side, Price price, Quantity qty){
+        if(id_to_index_.find(id) != kInvalidIndex){
+            ++duplicate_id_count_; //P10: a duplicate id must not orphan the first order
+            return;
+        }
         PoolIndex idx = pool_->acquire();
         if(idx==kInvalidIndex) return ; //pool exhausted
 
@@ -118,7 +122,7 @@ namespace lob{
         o.prev = kInvalidIndex;
         o.next = kInvalidIndex;
 
-        id_to_index_[id] = idx;
+        id_to_index_.insert(id, idx);
 
         std::array<PriceLevel, kMaxPriceTicks>& levels = (side==Side::BUY)? *bid_levels_ : *ask_levels_;
         PriceLevel& level = levels[static_cast<std::size_t>(price)];
@@ -170,10 +174,9 @@ namespace lob{
     bool MatchingEngine::cancelOrder(OrderId id)
     {
         //remove from PriceLevel and change best_ask_ or best_bid
-        auto it = id_to_index_.find(id);
-        if(it==id_to_index_.end()) return false;
+        PoolIndex idx = id_to_index_.find(id);
+        if(idx==kInvalidIndex) return false;
 
-        PoolIndex idx = it->second;
         Order& o = (*pool_)[idx];
         Price price = o.price;
         Quantity qty = o.quantity;
@@ -215,17 +218,17 @@ namespace lob{
     }
     
     std::optional<OrderView> MatchingEngine::getOrder(OrderId id) const{
-        auto it = id_to_index_.find(id);
-        if(it==id_to_index_.end()) return std::nullopt;
-        const Order& order = (*pool_)[it->second];
+        PoolIndex idx = id_to_index_.find(id);
+        if(idx==kInvalidIndex) return std::nullopt;
+        const Order& order = (*pool_)[idx];
         return OrderView{order.id, order.side, order.price, order.quantity};
     }
     std::vector<OrderView> MatchingEngine::liveOrders() const{
         std::vector<OrderView>out;
-        for( auto [id, idx] : id_to_index_){
+        id_to_index_.forEach([&](OrderId id, PoolIndex idx){
             const Order& order = (*pool_)[idx];
             out.push_back(OrderView{id, order.side, order.price, order.quantity});
-        }
+        });
         return out;
     }
 
