@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(ENABLE_ASAN "Build with AddressSanitizer" OFF)
+option(ENABLE_UBSAN "Build with UndefinedBehaviorSanitizer" OFF)
 option(ENABLE_TSAN "Build with ThreadSanitizer" OFF)
 option(BUILD_BENCHMARKS "Build the Google Benchmark harness" ON)
 
@@ -28,6 +29,11 @@ endif()
 if(ENABLE_ASAN)
   target_compile_options(lob_core PUBLIC -fsanitize=address -fno-omit-frame-pointer -g)
   target_link_options(lob_core PUBLIC -fsanitize=address)
+endif()
+
+if(ENABLE_UBSAN)
+  target_compile_options(lob_core PUBLIC -fsanitize=undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g)
+  target_link_options(lob_core PUBLIC -fsanitize=undefined -fno-sanitize-recover=all)
 endif()
 
 if(ENABLE_TSAN)
