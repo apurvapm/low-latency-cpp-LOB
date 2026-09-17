@@ -5,6 +5,45 @@
 A single-symbol, price-time-priority (FIFO) limit order book matching engine
 in C++20, built for low and predictable latency.
 
+## Results
+
+Measured on — Intel Core i7-1250U (12th gen,
+hybrid 2P+8E cores), Windows 11, GCC 16.1 (MSYS2 ucrt64), `-O3 -march=native`.
+
+**B0: per-order latency, before vs after a hardening pass** (flat id map +
+O(1) bitmap, see [Design](#design)), replaying the same 2²⁰-order synthetic
+stream against the `v1.0-synthetic` tag and against current `main`:
+
+| metric (all actions) | before | after | change |
+|---|---:|---:|---:|
+| mean  | 121.5 ns | 86.5 ns | -29% |
+| p50   | 61.7 ns  | 36.1 ns | -41% |
+| p99   | 617.0 ns | 253.0 ns | -59% |
+| p99.9 | 936.4 ns | 416.7 ns | -55% |
+
+The tail moved the most — the flat map (removes a per-insert allocation) and
+the bitmap (removes an O(gap) scan) are both tail-latency fixes that do not quantitatively show up in a mean.
+
+**Current Google Benchmark numbers** (median of 5 runs):
+
+| benchmark | ns/op |
+|---|---:|
+| Mixed limit/market/cancel flow (`BM_MatchingEngineOrderFlow`) | 134 |
+| ...stream pre-generated (`BM_MatchingEngineOrderFlow_no_bot`) | 63.4 |
+| Insert + cancel round trip (level never empties) | 82.9 |
+| Insert + cancel, level always empties (`BM_InsertCancelEmptyLevel`) | 85.3 |
+
+`BM_InsertCancelEmptyLevel` is new: same as the round trip but without the
+second "keeper" order, so every cancel empties the level and exercises
+`advanceBestBid`/`advanceBestAsk`. It's now within ~3% of the non-emptying
+variant — before the bitmap this gap was ~2x (45.2 ns vs 22.9 ns).
+
+Full breakdown by action (limit/market/cancel), raw output, machine details,
+and timer overhead: [`docs/results_engine_hardening.md`](docs/results_engine_hardening.md).
+For the design behind these numbers, see below; for the pre-hardening
+numbers on the original benchmarking machine, see
+[Benchmarks](#benchmarks).
+
 ## Design
 
 - **No heap allocation on the hot path.** Resting orders live in a
@@ -58,12 +97,10 @@ in C++20, built for low and predictable latency.
 
 ## Benchmarks
 
-The `v1.0-synthetic` numbers below were measured at that tag, on the
-original benchmarking machine (15 cores, 64 KiB L1d, 8 MiB L2). The `v1.1`
-numbers (engine hardening: flat map, bitmap, validation) were re-measured on
-a different machine, so the two are **not directly comparable** to each
-other — only the `v1.1` before/after comparison below (same machine, same
-harness, both sides) is.
+The numbers below predate the hardening pass and were measured at the
+`v1.0-synthetic` tag, on the original benchmarking machine (15 cores,
+64 KiB L1d, 8 MiB L2) — a different machine than [Results](#results) above,
+so the two are **not directly comparable** to each other.
 
 ### Results (`v1.0-synthetic`)
 
@@ -79,39 +116,6 @@ The mixed flow replays a pre-generated stream from `TradingBot` (~75% limit,
 pool's 2²⁰ capacity. The round trip measures pure bookkeeping — pool
 acquire/release, intrusive list splice/unlink, and two `id_to_index_`
 operations — with no matching.
-
-### `v1.1` (engine hardening): current numbers and before/after
-
-Measured on this session's dev machine — Intel Core i7-1250U (12th gen,
-hybrid 2P+8E cores), Windows 11, GCC 16.1 (MSYS2 ucrt64), `-O3 -march=native`
-— not the machine above.
-
-| benchmark | ns/op (median of 5 runs) |
-|---|---:|
-| Mixed limit/market/cancel flow (`BM_MatchingEngineOrderFlow`) | 134 |
-| ...stream pre-generated (`BM_MatchingEngineOrderFlow_no_bot`) | 63.4 |
-| Insert + cancel round trip (level never empties) | 82.9 |
-| Insert + cancel, level always empties (`BM_InsertCancelEmptyLevel`) | 85.3 |
-
-`BM_InsertCancelEmptyLevel` is new: same as the round trip but without the
-second "keeper" order, so every cancel empties the level and exercises
-`advanceBestBid`/`advanceBestAsk`. It's now within ~3% of the non-emptying
-variant — before the bitmap this gap was ~2x (45.2 ns vs 22.9 ns).
-
-**B0: per-order latency distribution, before vs after hardening** (same
-machine, same `bench/latency_mixed.cpp` harness, `v1.0-synthetic` vs current):
-
-| metric (all actions) | before | after | change |
-|---|---:|---:|---:|
-| mean  | 121.5 ns | 86.5 ns | -29% |
-| p50   | 61.7 ns  | 36.1 ns | -41% |
-| p99   | 617.0 ns | 253.0 ns | -59% |
-| p99.9 | 936.4 ns | 416.7 ns | -55% |
-
-The tail moved the most, as expected — the flat map and bitmap are both
-tail-latency fixes that barely show up in a mean. Full breakdown by action
-(limit/market/cancel), raw output, machine details, and timer overhead:
-[`docs/results_engine_hardening.md`](docs/results_engine_hardening.md).
 
 ## CLI
 
@@ -266,3 +270,11 @@ inserts, so pool occupancy never exceeds two and the run is safe at any
 iteration count. Its stability across all three runs (23.1 / 22.0 / 22.9 ns)
 is the control that shows the variation in the other two is the book, not the
 harness.
+
+## Project history
+
+- **v1.0** (`v1.0-synthetic`): initial engine. Correct matching, but the id
+  map allocated on every insert and the best-price scan was O(gap).
+- **v1.1**: engine hardening. Allocation-free id map, O(1) bitmap best-level
+  search, input validation counters, CI with ASan/UBSan/TSan. p99 latency
+  down 59% on the same synthetic stream (see [Results](#results)).
