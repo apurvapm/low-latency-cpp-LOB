@@ -5,22 +5,26 @@
 
 namespace lob{
 
-    MatchingEngine::MatchingEngine(std::string_view symbol, Price max_price):
-    symbol_(symbol), 
+    MatchingEngine::MatchingEngine(std::string_view symbol, Price max_price, std::size_t order_capacity):
     max_price_(max_price), //
     bid_levels_(std::make_unique<std::array<PriceLevel, kMaxPriceTicks>>()), //this will be allocated once
     ask_levels_(std::make_unique<std::array<PriceLevel, kMaxPriceTicks>>()), //can go further and touch all allocated pages, so that there are no page faults later
     bid_bitmap_(std::make_unique<LevelBitmap>()),
     ask_bitmap_(std::make_unique<LevelBitmap>()),
-    id_to_index_(kOrderCapacity),
-    pool_(std::make_unique<ObjectPool<Order, kOrderCapacity>>())
+    id_to_index_(order_capacity),
+    pool_(std::make_unique<ObjectPool<Order>>(order_capacity))
     {
         assert(max_price > 0 && static_cast<std::size_t>(max_price_) <= kMaxPriceTicks);
+        std::size_t n = std::min(symbol.size(), symbol_.size());
+        std::copy_n(symbol.begin(), n, symbol_.begin());
     }
 
     std::size_t MatchingEngine::addLimitOrder(OrderId id, Side side, Price price, Quantity qty, std::span<Trade> trades)
     {
-        assert(0<= price && price< max_price_);
+        if(price < 0 || price >= max_price_ || qty == 0){
+            ++rejected_count_; //P3: an invalid order is rejected, not asserted away
+            return 0;
+        }
         //match it with resting orders
         Quantity remaining = qty;
         std::size_t n_ordersFilled = match(id, side, price, remaining, /*is_market*/false, trades);
@@ -29,6 +33,10 @@ namespace lob{
     }
 
     std::size_t MatchingEngine::addMarketOrder(OrderId id, Side side, Quantity qty, std::span<Trade> trades){
+        if(qty == 0){
+            ++rejected_count_;
+            return 0;
+        }
         Quantity remaining = qty;
         return match(id, side, /*limit_price*/0,remaining, /*is_market*/true, trades);
     }
@@ -45,6 +53,7 @@ namespace lob{
                     Order& maker = (*pool_)[level.head];
                     Quantity qty_traded = std::min(qty, maker.quantity);
                     if(n_ordersFilled < trades.size()) trades[n_ordersFilled++] = Trade{ maker.id,taker_id, best_ask_, qty_traded};
+                    else ++truncated_trade_count_; //P5: this fill still executes but isn't recorded
                     qty-= qty_traded;
                     maker.quantity -= qty_traded;
                     level.total_quantity-= qty_traded;
@@ -73,6 +82,7 @@ namespace lob{
                     Order& maker = (*pool_)[level.head];
                     Quantity qty_traded = std::min(maker.quantity, qty);
                     if(n_ordersFilled < trades.size())trades[n_ordersFilled++] = Trade{ maker.id, taker_id,best_bid_, qty_traded};
+                    else ++truncated_trade_count_;
                     maker.quantity-= qty_traded;
                     level.total_quantity -= qty_traded;
                     qty-= qty_traded;
@@ -120,7 +130,10 @@ namespace lob{
             return;
         }
         PoolIndex idx = pool_->acquire();
-        if(idx==kInvalidIndex) return ; //pool exhausted
+        if(idx==kInvalidIndex){
+            ++dropped_count_; //P4: the resting remainder is dropped, not silently lost
+            return;
+        }
 
         Order& o = (*pool_)[idx];
         o.id = id;
