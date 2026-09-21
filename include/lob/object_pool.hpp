@@ -9,7 +9,7 @@
 namespace lob{
 
     // Runtime-sized free-list allocator backed by one heap block, allocated
-    // once in the constructor (P6): a fixed 2^20-capacity array cost ~36 MB
+    // once in the constructor: a fixed 2^20-capacity array cost ~36 MB
     // per engine regardless of how many orders a symbol actually needed.
     template<typename T>
     requires std::default_initializable<T>

@@ -123,7 +123,7 @@ static void BM_InsertCancelEmptyLevel(benchmark::State& state)
 {
     // Same as BM_InsertCancelRoundTrip but with no second resting order at
     // the price, so every cancel empties the level and calls
-    // advanceBestBid/Ask (P2: pre-bitmap this was an O(gap) tick-by-tick
+    // advanceBestBid/Ask ( pre-bitmap this was an O(gap) tick-by-tick
     // scan; with the bitmap it should cost about the same as the variant
     // that never empties the level).
     lob::MatchingEngine engine("BENCH", kMaxPrice);
