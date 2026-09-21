@@ -6,3 +6,4 @@ compile_commands.json
 .DS_Store
 bench_results.json
 TASK_TODAY.md
+docs/
