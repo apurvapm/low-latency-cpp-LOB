@@ -14,7 +14,7 @@ namespace lob {
     // non-empty 64-word L1 group (L2, a single word since kL1Words <= 64).
     // Every operation touches a handful of words regardless of how far the
     // next/prev set bit is -- this is what makes advanceBestBid/Ask O(1)
-    // instead of O(gap) (P2).
+    // instead of O(gap)
     class LevelBitmap {
         public:
         static constexpr std::size_t kL0Words = (kMaxPriceTicks + 63) / 64; // 1563

@@ -39,17 +39,14 @@ namespace lob{
     class MatchingEngine{
         public :
         // symbol is truncated to 8 bytes and copied, so it survives the
-        // source string being destroyed (P7). order_capacity sizes the order
-        // pool and the id map (P6); it defaults to the historical 2^20.
+        // source string being destroyed. order_capacity sizes the order
+        // pool and the id map; it defaults to the original 2^20.
         explicit MatchingEngine(std::string_view symbol, Price max_price, std::size_t order_capacity = kOrderCapacity);
 
-        // Returns the number of fills recorded into `trades` (not the number
-        // of fills that occurred: if matching produces more fills than
-        // `trades` has room for, the excess still executes -- quantities and
-        // the book are updated correctly -- but isn't recorded, and is
-        // counted in truncatedTradeCount() instead (P5). A rejected order
-        // (invalid price or zero quantity, P3) returns 0 and is counted in
-        // rejectedCount(), without touching the book.
+        // Return the number of fills recorded into `trades` (not the number of fills that occurred: if matching produces more fills than
+        // `trades` has room for, the excess still executes -- quantities and the book are updated correctly -- but isn't recorded, and is
+        // counted in truncatedTradeCount() instead. A rejected order (invalid price or zero quantity) returns 0 and is counted in rejectedCount(), without touching the book.
+
         std::size_t addLimitOrder(OrderId id, Side side, Price price, Quantity qty, std::span<Trade> trades);
         std::size_t addMarketOrder(OrderId id, Side side, Quantity qty, std::span<Trade> trades);
 
@@ -70,7 +67,7 @@ namespace lob{
         }
 
         // Trailing zero padding (from truncating/copying the constructor's
-        // symbol argument into a fixed 8-byte buffer, P7) is trimmed off.
+        // symbol argument into a fixed 8-byte buffer) is trimmed off.
         [[nodiscard]] std::string_view symbol() const noexcept{
             std::size_t len = 0;
             while(len < symbol_.size() && symbol_[len] != '\0') ++len;
@@ -78,16 +75,16 @@ namespace lob{
         }
         std::size_t restingOrderCount() const noexcept{return id_to_index_.size();}
         // Count of addLimitOrder/addMarketOrder-driven resting inserts rejected
-        // because the id was already live (P10): the order is dropped, not
+        // because the id was already live: the order is dropped, not
         // merged or overwritten.
         std::uint64_t duplicateIdCount() const noexcept{return duplicate_id_count_;}
         // addLimitOrder/addMarketOrder calls rejected for an invalid price or
-        // zero quantity (P3); the book is untouched.
+        // zero quantity; the book is untouched.
         std::uint64_t rejectedCount() const noexcept{return rejected_count_;}
-        // Resting inserts dropped because the order pool was exhausted (P4).
+        // Resting inserts dropped because the order pool was exhausted .
         std::uint64_t droppedCount() const noexcept{return dropped_count_;}
         // Fills that executed but couldn't be recorded because `trades` ran
-        // out of room (P5); see addLimitOrder/addMarketOrder's return value.
+        // out of room; see addLimitOrder/addMarketOrder's return value.
         std::uint64_t truncatedTradeCount() const noexcept{return truncated_trade_count_;}
 
         //for cli display, these use vector
@@ -103,7 +100,7 @@ namespace lob{
         void advanceBestAsk();
         void advanceBestBid();
 
-        std::array<char, 8> symbol_{}; //fixed-size, copied from the constructor argument (P7); zero-padded
+        std::array<char, 8> symbol_{}; //fixed-size, copied from the constructor argument; zero-padded
         Price max_price_;
         Price best_bid_ = kInvalidPrice;
         Price best_ask_ = kInvalidPrice;
@@ -113,7 +110,7 @@ namespace lob{
         std::unique_ptr<LevelBitmap> bid_bitmap_; //bit set <=> the level at that tick is non-empty
         std::unique_ptr<LevelBitmap> ask_bitmap_;
         FlatIdMap id_to_index_; //preallocated open-addressing map, allocates once at construction, never on the hot path
-        std::unique_ptr<ObjectPool<Order>> pool_; //runtime-sized (P6), allocated once at construction
+        std::unique_ptr<ObjectPool<Order>> pool_; //runtime-sized), allocated once at construction
         std::uint64_t duplicate_id_count_ = 0;
         std::uint64_t rejected_count_ = 0;
         std::uint64_t dropped_count_ = 0;

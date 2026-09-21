@@ -92,7 +92,7 @@ namespace{
     }
 
     void test_rejects_invalid_orders(){
-        //P3: an out-of-range price or zero quantity is rejected, book untouched
+        // an out-of-range price or zero quantity is rejected, book untouched
         MatchingEngine engine("TEST", 1000);
         std::array<Trade, 4> trades;
 
@@ -107,7 +107,7 @@ namespace{
     }
 
     void test_pool_exhaustion_drops_order(){
-        //P4: a full pool drops the resting remainder instead of losing it silently
+        // a full pool drops the resting remainder instead of losing it silently
         MatchingEngine engine("TEST", 1000, /*order_capacity*/4);
         std::array<Trade, 4> trades;
 
@@ -123,7 +123,7 @@ namespace{
     }
 
     void test_truncated_trades_reported(){
-        //P5: fills beyond the trades span still execute but are counted, not lost
+        // fills beyond the trades span still execute but are counted, not lost
         MatchingEngine engine("TEST", 1000);
         std::array<Trade, 4> setup_trades;
         engine.addLimitOrder(1, Side::SELL, 100, 5, setup_trades);
@@ -140,7 +140,7 @@ namespace{
     }
 
     void test_symbol_survives_source_destruction(){
-        //P7: the symbol is copied into the engine, not referenced
+        // the symbol is copied into the engine, not referenced
         std::optional<MatchingEngine> engine;
         {
             std::string temp = "TEMP";

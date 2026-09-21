@@ -3,7 +3,7 @@
 #include <cstdio>
 
 // CHECK(cond) is assert() that isn't compiled out by NDEBUG, so it still
-// verifies something in the default Release build (see P8: the old tests
+// verifies something in the default Release build (the old tests
 // used bare assert() and CMAKE_BUILD_TYPE=Release defines NDEBUG, so
 // `ctest` passed without checking anything).
 namespace lob::test {

@@ -22,7 +22,7 @@ namespace lob{
     std::size_t MatchingEngine::addLimitOrder(OrderId id, Side side, Price price, Quantity qty, std::span<Trade> trades)
     {
         if(price < 0 || price >= max_price_ || qty == 0){
-            ++rejected_count_; //P3: an invalid order is rejected, not asserted away
+            ++rejected_count_; // an invalid order is rejected, not asserted away
             return 0;
         }
         //match it with resting orders
@@ -53,7 +53,7 @@ namespace lob{
                     Order& maker = (*pool_)[level.head];
                     Quantity qty_traded = std::min(qty, maker.quantity);
                     if(n_ordersFilled < trades.size()) trades[n_ordersFilled++] = Trade{ maker.id,taker_id, best_ask_, qty_traded};
-                    else ++truncated_trade_count_; //P5: this fill still executes but isn't recorded
+                    else ++truncated_trade_count_; // this fill still executes but isn't recorded
                     qty-= qty_traded;
                     maker.quantity -= qty_traded;
                     level.total_quantity-= qty_traded;
@@ -126,12 +126,12 @@ namespace lob{
     }
     void MatchingEngine::insertResting(OrderId id, Side side, Price price, Quantity qty){
         if(id_to_index_.find(id) != kInvalidIndex){
-            ++duplicate_id_count_; //P10: a duplicate id must not orphan the first order
+            ++duplicate_id_count_; // a duplicate id must not orphan the first order
             return;
         }
         PoolIndex idx = pool_->acquire();
         if(idx==kInvalidIndex){
-            ++dropped_count_; //P4: the resting remainder is dropped, not silently lost
+            ++dropped_count_; // the resting remainder is dropped, not just lost
             return;
         }
 
@@ -174,7 +174,7 @@ namespace lob{
     void MatchingEngine::advanceBestAsk()
     {
         //this level was emptied; the next best ask is the next set bit above it,
-        //found in O(1) via the bitmap instead of an O(gap) tick-by-tick scan (P2)
+        //found in O(1) via the bitmap instead of an O(gap) tick-by-tick scan 
         Price next = ask_bitmap_->nextSetAtOrAbove(best_ask_ + 1);
         best_ask_ = (next != kInvalidPrice && next < max_price_) ? next : kInvalidPrice;
     }
