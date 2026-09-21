@@ -6,4 +6,5 @@ compile_commands.json
 .DS_Store
 bench_results.json
 TASK_TODAY.md
-docs/
+docs/design.md
+docs/extra.md
