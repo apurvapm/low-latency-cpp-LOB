@@ -10,11 +10,7 @@
 
 namespace lob {
 
-    // Preallocated open-addressing map from OrderId -> PoolIndex: linear
-    // probing, power-of-two capacity, backward-shift deletion (no
-    // tombstones). An empty slot is denoted by value == kInvalidIndex, never
-    // by a reserved key, so any OrderId (including 0) is a valid key.
-    // All operations allocate nothing after construction.
+    // power-of-two capacity(load-factor<0.5)
     class FlatIdMap {
         public:
         explicit FlatIdMap(std::size_t order_capacity)
@@ -25,6 +21,7 @@ namespace lob {
 
         [[nodiscard]] PoolIndex find(OrderId id) const noexcept {
             std::size_t i = home(id);
+            //linear probing
             while (slots_[i].value != kInvalidIndex) {
                 if (slots_[i].key == id) return slots_[i].value;
                 i = (i + 1) & mask_;
@@ -43,7 +40,7 @@ namespace lob {
             ++size_;
             return true;
         }
-
+        // backward-shift deletion (no tombstones). 
         bool erase(OrderId id) noexcept {
             std::size_t i = home(id);
             while (true) {
@@ -58,6 +55,7 @@ namespace lob {
 
         [[nodiscard]] std::size_t size() const noexcept { return size_; }
 
+        // to take a snapshot and process
         template <typename Fn>
         void forEach(Fn&& fn) const {
             for (std::size_t i = 0; i < capacity_; ++i) {
@@ -71,7 +69,7 @@ namespace lob {
             PoolIndex value = kInvalidIndex;
         };
 
-        // splitmix64's finalizer, used purely as a bit mixer here.
+        // splitmix64 used as a bit mixer
         static constexpr std::uint64_t mix(std::uint64_t x) noexcept {
             x ^= x >> 30;
             x *= 0xbf58476d1ce4e5b9ULL;
@@ -85,10 +83,8 @@ namespace lob {
             return static_cast<std::size_t>(mix(static_cast<std::uint64_t>(id)) & static_cast<std::uint64_t>(mask_));
         }
 
-        // Removes the occupant at `hole` and shifts later entries of its
-        // probe chain backward, so later find()s still terminate correctly
-        // without needing a tombstone. See Wikipedia "Open addressing" ->
-        // Deletion, or Knuth's Algorithm R6.
+        // Can read up Wikipedia "Open addressing" ->
+        // Knuth's Algorithm R6.(also used in llvm , llvm/ADT/SmallPtrSet.h)
         void backwardShift(std::size_t hole) noexcept {
             std::size_t j = hole;
             while (true) {
@@ -112,4 +108,4 @@ namespace lob {
         std::size_t size_ = 0;
     };
 
-} // namespace lob
+}
