@@ -37,19 +37,37 @@ namespace {
     constexpr lob::Price kMeanPrice = 50'000;
     constexpr std::size_t kStreamLength = 1u << 20;
 
-    void pinToCore(unsigned core) {
+    bool pinToCore(unsigned core) {
 #if defined(_WIN32)
-        SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(std::uint64_t{1} << core));
+        DWORD_PTR prev = SetThreadAffinityMask(GetCurrentThread(), static_cast<DWORD_PTR>(std::uint64_t{1} << core));
+        return prev != 0;
 #else
         cpu_set_t set;
         CPU_ZERO(&set);
         CPU_SET(core, &set);
-        pthread_setaffinity_np(pthread_self(), sizeof(set), &set);
+        return pthread_setaffinity_np(pthread_self(), sizeof(set), &set) == 0;
 #endif
     }
 
-    inline std::uint64_t rdtsc() {
-        return __rdtsc();
+    // Plain RDTSC isn't serializing: the CPU can execute it out of order
+    // relative to the code around it, so the timed region's instructions
+    // could leak outside the two counter reads. LFENCE before the start read
+    // blocks it until everything before has retired; RDTSCP is itself
+    // serializing against everything *before* it (unlike RDTSC), and the
+    // LFENCE after it stops later instructions from being issued before that
+    // read completes.
+    inline std::uint64_t rdtscStart() {
+        _mm_lfence();
+        std::uint64_t t = __rdtsc();
+        // _mm_lfence();
+        return t;
+    }
+
+    inline std::uint64_t rdtscEnd() {
+        unsigned aux;
+        std::uint64_t t = __rdtscp(&aux);
+        _mm_lfence();
+        return t;
     }
 
     // TSC ticks per nanosecond, calibrated over ~200ms against a monotonic
@@ -57,11 +75,11 @@ namespace {
     double calibrateTscPerNs() {
         using namespace std::chrono;
         auto wall_start = steady_clock::now();
-        std::uint64_t tsc_start = rdtsc();
+        std::uint64_t tsc_start = rdtscStart();
         while (duration_cast<milliseconds>(steady_clock::now() - wall_start).count() < 200) {
             // spin
         }
-        std::uint64_t tsc_end = rdtsc();
+        std::uint64_t tsc_end = rdtscEnd();
         auto wall_end = steady_clock::now();
         double ns = static_cast<double>(duration_cast<nanoseconds>(wall_end - wall_start).count());
         double ticks = static_cast<double>(tsc_end - tsc_start);
@@ -108,10 +126,10 @@ int main(int argc, char** argv) {
             core = static_cast<unsigned>(std::strtoul(argv[++i], nullptr, 10));
         }
     }
-    pinToCore(core);
+    bool pinned = pinToCore(core);
 
     double tsc_per_ns = calibrateTscPerNs();
-    std::printf("pinned_core=%u tsc_per_ns=%.4f\n", core, tsc_per_ns);
+    std::printf("pinned_core=%u pin_succeeded=%s tsc_per_ns=%.4f\n", core, pinned ? "yes" : "no", tsc_per_ns);
 
     lob::TradingBot bot(1, kMeanPrice, kMaxPrice);
     std::vector<lob::BotOrder> stream;
@@ -124,8 +142,8 @@ int main(int argc, char** argv) {
     // Timer overhead: an empty timed region, same sample count as below.
     std::vector<std::uint64_t> overhead_ticks(kStreamLength);
     for (std::size_t i = 0; i < kStreamLength; ++i) {
-        std::uint64_t t0 = rdtsc();
-        std::uint64_t t1 = rdtsc();
+        std::uint64_t t0 = rdtscStart();
+        std::uint64_t t1 = rdtscEnd();
         overhead_ticks[i] = t1 - t0;
     }
 
@@ -138,7 +156,7 @@ int main(int argc, char** argv) {
 
     for (std::size_t i = 0; i < kStreamLength; ++i) {
         const lob::BotOrder& order = stream[i];
-        std::uint64_t t0 = rdtsc();
+        std::uint64_t t0 = rdtscStart();
         switch (order.action) {
             case lob::BotAction::MARKET:
                 engine.addMarketOrder(order.id, order.side, order.quantity, trades);
@@ -150,7 +168,7 @@ int main(int argc, char** argv) {
                 engine.cancelOrder(order.id);
                 break;
         }
-        std::uint64_t dt = rdtsc() - t0;
+        std::uint64_t dt = rdtscEnd() - t0;
         all_ticks.push_back(dt);
         switch (order.action) {
             case lob::BotAction::LIMIT: limit_ticks.push_back(dt); break;
