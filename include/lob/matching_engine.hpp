@@ -19,7 +19,7 @@
 namespace lob{
     inline constexpr std::size_t kOrderCapacity = 1u<<20; // ~1M orders
 
-//these two needed for the cli 
+    //these two needed for the cli 
     struct LevelView{
         Price price;
         Quantity total_qty;
@@ -33,8 +33,8 @@ namespace lob{
         Price price;
         Quantity quantity;
     };
-//these two needed for the cli
-//end
+    //these two needed for the cli
+    //end
 
     class MatchingEngine{
         public :
@@ -105,7 +105,7 @@ namespace lob{
         Price best_bid_ = kInvalidPrice;
         Price best_ask_ = kInvalidPrice;
 
-        std::unique_ptr<std::array<PriceLevel, kMaxPriceTicks>> bid_levels_; //dont want the matching engine to own the enormous array directly, also might get stack overflow
+        std::unique_ptr<std::array<PriceLevel, kMaxPriceTicks>> bid_levels_; 
         std::unique_ptr<std::array<PriceLevel, kMaxPriceTicks>> ask_levels_;
         std::unique_ptr<LevelBitmap> bid_bitmap_; //bit set <=> the level at that tick is non-empty
         std::unique_ptr<LevelBitmap> ask_bitmap_;

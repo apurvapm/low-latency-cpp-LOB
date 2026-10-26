@@ -6,7 +6,6 @@
 // so overriding operator new/delete here would fight it (see CMakeLists.txt).
 
 #include <array>
-#include <atomic>
 #include <cstdlib>
 #include <iostream>
 #include <new>
@@ -17,13 +16,15 @@
 #include "lob/trading_bot.hpp"
 
 namespace {
-    std::atomic<bool> g_counting{false};
-    std::atomic<std::size_t> g_alloc_count{0};
+    // Plain flags, not atomics: this program is single-threaded (just main()),
+    // so there's no concurrent access to guard against.
+    bool g_counting = false;
+    std::size_t g_alloc_count = 0;
 }
 
 void* operator new(std::size_t sz) {
-    if (g_counting.load(std::memory_order_relaxed)) {
-        g_alloc_count.fetch_add(1, std::memory_order_relaxed);
+    if (g_counting) {
+        ++g_alloc_count;
     }
     if (void* p = std::malloc(sz ? sz : 1)) return p;
     throw std::bad_alloc();
@@ -53,7 +54,7 @@ int main() {
     lob::MatchingEngine engine("NOALLOC", kMaxPrice);
     std::array<lob::Trade, 64> trades;
 
-    g_counting.store(true, std::memory_order_relaxed);
+    g_counting = true;
     for (const lob::BotOrder& order : stream) {
         switch (order.action) {
             case lob::BotAction::MARKET:
@@ -67,9 +68,9 @@ int main() {
                 break;
         }
     }
-    g_counting.store(false, std::memory_order_relaxed);
+    g_counting = false;
 
-    std::size_t allocs = g_alloc_count.load(std::memory_order_relaxed);
+    std::size_t allocs = g_alloc_count;
     std::cout << "hot-path allocations: " << allocs << "\n";
     CHECK(allocs == 0);
 

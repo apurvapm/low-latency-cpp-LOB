@@ -37,17 +37,20 @@ static void BM_MatchingEngineOrderFlow(benchmark::State& state){
         switch(order.action){
             case lob::BotAction::MARKET :
             {
-                engine.addMarketOrder(order.id, order.side, order.quantity, trades);
+                benchmark::DoNotOptimize(
+                    engine.addMarketOrder(order.id, order.side, order.quantity, trades));
                 break;
             }
             case lob::BotAction::LIMIT:
             {
-                engine.addLimitOrder(order.id, order.side, order.price, order.quantity, trades);
+                benchmark::DoNotOptimize(
+                    engine.addLimitOrder(order.id, order.side, order.price, order.quantity, trades));
                 break;
             }
             case lob::BotAction::CANCEL:
             {
-                engine.cancelOrder(order.id);
+                benchmark::DoNotOptimize(
+                    engine.cancelOrder(order.id));
                 break;
             }
         }
@@ -108,10 +111,10 @@ static void BM_InsertCancelRoundTrip(benchmark::State& state)
     engine.addLimitOrder(1, lob::Side::BUY, 100, 10, trades); //keeps the level non-empty
 
 
-    for(auto _ : state){
+    for(auto _ : state){ // truly runs until it becomes statistically stable, iterations not fixed
         //add a BUY LIMIT order
         lob::OrderId cur_id = id++;
-        engine.addLimitOrder(cur_id, lob::Side::BUY, 100, 10, trades);
+        benchmark::DoNotOptimize(engine.addLimitOrder(cur_id, lob::Side::BUY, 100, 10, trades));
         benchmark::DoNotOptimize(engine.cancelOrder(cur_id));
     }
     state.SetItemsProcessed(state.iterations()); // to report items/sec as well, along with the default ns/iteration

@@ -13,7 +13,7 @@ namespace lob{
         BotAction action = BotAction::LIMIT;
         OrderId id=0;
         Side side = Side::BUY;
-        Price price = 0; //could use kInvalid
+        Price price = 0; 
         Quantity quantity=0;
     };
 
@@ -29,7 +29,7 @@ namespace lob{
             std::normal_distribution<double> noise_;
             Price mean_price_;
             Price max_price_;
-            double current_price_;//why is this double and max and mean price are Price which is a uint32_t
+            double current_price_;//double--> so that mean reversion works correctly, and doesnt get stuck, and max and mean price are Price which is a uint32_t
             OrderId next_id_ =1;
             std::vector<OrderId> live_orders_;
             //this grows on the 65%-probability limit orders branch and shrinks on 15%-probability cancel branch
