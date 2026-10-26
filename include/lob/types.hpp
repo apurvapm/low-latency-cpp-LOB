@@ -23,7 +23,7 @@ namespace lob{
     };
 
     struct Trade{
-        //all the following will be asigned
+        //all the following will be assigned
         OrderId maker_id, taker_id; 
         Price price;
         Quantity quantity;

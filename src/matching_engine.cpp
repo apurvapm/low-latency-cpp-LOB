@@ -107,7 +107,6 @@ namespace lob{
 
     void MatchingEngine::unlink(PriceLevel& level, PoolIndex idx)
     {
-        //assume that idx is valid??
         Order& o = (*pool_)[idx];
         if(o.prev!=kInvalidIndex){
             (*pool_)[o.prev].next = o.next;
@@ -198,7 +197,7 @@ namespace lob{
         std::array<PriceLevel, kMaxPriceTicks>& levels = (side ==Side::BUY)? *bid_levels_ : *ask_levels_;
         PriceLevel& level = levels[static_cast<std::size_t>(price)];
         level.total_quantity -= qty;
-        unlink(level, idx);
+        unlink(level, idx);//leevl.order_count is handled here
 
         id_to_index_.erase(id);
         pool_->release(idx);

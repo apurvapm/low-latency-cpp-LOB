@@ -10,7 +10,7 @@ in C++20, built for low and predictable latency.
 Measured on — Intel Core i7-1250U (12th gen,
 hybrid 2P+8E cores), Windows 11, GCC 16.1 (MSYS2 ucrt64), `-O3 -march=native`.
 
-**B0: per-order latency, before vs after a hardening pass** (flat id map +
+**per-order latency, before vs after a hardening pass** (flat id map +
 O(1) bitmap, see [Design](#design)), replaying the same 2²⁰-order synthetic
 stream against the `v1.0-synthetic` tag and against current `main`:
 
@@ -273,8 +273,21 @@ harness.
 
 ## Project history
 
+- **v1.0** (`v1.0-synthetic`): initial matching engine. Correct price-time
+  priority matching, but two problems showed up under load: the id lookup
+  allocated on every insert (`std::unordered_map`'s `reserve()` only
+  preallocates buckets, not nodes), and finding the next best price after a
+  level emptied was an O(gap) scan.
+- **v1.1**: engine hardening pass. Replaced the id map with an
+  allocation-free open-addressing table, replaced the price scan with an
+  O(1) three-level bitmap, added input-validation counters instead of
+  asserts on the hot path, and added CI running the tests under ASan,
+  UBSan, and TSan. Result: hot-path allocations went from 549,602 to 0 over
+  a 2^20-order stream, and p99 latency dropped 59% on the same stream (see
+  [Results](#results)).
+<!--   
 - **v1.0** (`v1.0-synthetic`): initial engine. Correct matching, but the id
   map allocated on every insert and the best-price scan was O(gap).
 - **v1.1**: engine hardening. Allocation-free id map, O(1) bitmap best-level
   search, input validation counters, CI with ASan/UBSan/TSan. p99 latency
-  down 59% on the same synthetic stream (see [Results](#results)).
+  down 59% on the same synthetic stream (see [Results](#results)). -->
